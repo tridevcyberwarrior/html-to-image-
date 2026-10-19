@@ -4,12 +4,6 @@ from playwright.sync_api import sync_playwright
 
 app = Flask(__name__)
 
-# ek hi browser instance reuse karo — har request pe naya mat banao
-_pw = sync_playwright().start()
-_browser = _pw.chromium.launch(
-    args=['--no-sandbox', '--disable-gpu', '--hide-scrollbars']
-)
-
 @app.route('/render', methods=['POST'])
 def render():
     data = request.get_json(force=True)
@@ -22,14 +16,19 @@ def render():
         return jsonify({'error': 'html required'}), 400
 
     try:
-        context = _browser.new_context(
-            viewport={'width': width, 'height': height},
-            device_scale_factor=scale
-        )
-        page = context.new_page()
-        page.set_content(html, wait_until='networkidle', timeout=30000)
-        img_bytes = page.screenshot(full_page=True, type='png')
-        context.close()
+        # har request ke andar hi browser start karo, aur band kar do
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                args=['--no-sandbox', '--disable-gpu', '--hide-scrollbars']
+            )
+            context = browser.new_context(
+                viewport={'width': width, 'height': height},
+                device_scale_factor=scale
+            )
+            page = context.new_page()
+            page.set_content(html, wait_until='load', timeout=60000)
+            img_bytes = page.screenshot(full_page=True, type='png')
+            browser.close()
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
